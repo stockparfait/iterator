@@ -100,7 +100,6 @@ func (m *parallelMapIter[In, Out]) startJobs() {
 
 // Next implements Iterator. It runs jobs in parallel up to the number of
 // workers, blocks till at least one finishes (if any), and returns its result.
-// Go routine safe.
 func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
 	m.startJobs()
 	if m.jobs == 0 {
@@ -114,8 +113,7 @@ func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
 	return r, true
 }
 
-// ParallelMapSlice is a convenience method around Map. It runs a slice of jobs
-// in parallel, waits for them to finish, and returns the results in a slice.
+// ParallelMapSlice maps an input slice into the output slice using ParallelMap.
 func ParallelMapSlice[In, Out any](ctx context.Context, workers int, in []In, f func(In) Out) []Out {
 	return ToSlice(ParallelMap(ctx, workers, FromSlice(in), f))
 }
