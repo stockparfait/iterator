@@ -16,7 +16,6 @@ package iterator
 
 import (
 	"context"
-	"sync"
 )
 
 type contextKey int
@@ -45,12 +44,11 @@ type parallelMapIter[In, Out any] struct {
 	f       func(In) Out
 	resCh   chan Out // workers send their results to this channel
 	done    bool
-	mux     sync.Mutex // to make Next() go routine safe
 }
 
-// ParallelMap runs multiple jobs in parallel on a given number of workers,
-// 0=unlimited, collects their results and returns as an iterator. The order of
-// the results is not guaranteed, unless the number of workers is 1.
+// ParallelMap runs multiple function calls f(In) in parallel on a given number
+// of workers (0=unlimited), collects their results and returns as an iterator.
+// The order of the results is undefined, unless the number of workers is 1.
 //
 // Canceling the supplied context immediately stops queuing new jobs, but the
 // jobs that already started will finish and their results will be returned.
@@ -62,7 +60,7 @@ type parallelMapIter[In, Out any] struct {
 //
 // Example usage:
 //
-//	m := ParallelMap(context.Background(), 2, jobsIter)
+//	m := ParallelMap(context.Background(), 2, it, f)
 //	for v, ok := m.Next(); ok; v, ok = m.Next() {
 //	  // Process v
 //	}
@@ -104,9 +102,6 @@ func (m *parallelMapIter[In, Out]) startJobs() {
 // workers, blocks till at least one finishes (if any), and returns its result.
 // Go routine safe.
 func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-
 	m.startJobs()
 	if m.jobs == 0 {
 		m.done = true

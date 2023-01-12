@@ -35,15 +35,23 @@ func main() {
 
 ## ParallelMap - parallel execution with a specified number of workers
 
-This method implements processing units of work (`Job`) in parallel using a
-specified number of workers (0 - unlimited). In the most general case
-(`ParallelMap`), the user supplies an iterator over `Job`'s which are processed
-in parallel and the results are returned as an iterator of the results.
+`ParallelMap` is similar to `Map`, except that it runs multiple function calls
+`f(In)` ("jobs") in parallel on a given number of workers (unlimited when 0).
+The order of the results is undefined, unless the number of workers is 1.
 
-For simpler situations when all jobs can be created ahead of time and the
-results collected before further processing, use `ParallelMapSlice`.
+Canceling the supplied context immediately stops queuing new jobs, but the jobs
+that already started will finish and their results will be returned.  Therefore,
+it is important to flush the iterator after canceling the context to release all
+the resources.
 
-Example:
+No job is started by this method itself. Jobs begin to run on the first `Next()`
+call on the result iterator.
+
+Note, that `Next()` is _not_ go routine safe, and it doesn't require go routine
+safety of the input iterator.
+
+For simpler situations when the input sequence can be created ahead of time and
+the results collected in a slice before further processing, use `ParallelMapSlice`:
 
 ```go
 package main
