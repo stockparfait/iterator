@@ -55,16 +55,11 @@ import (
 	"github.com/stockparfait/iterator"
 )
 
-func job(i int) iterator.Job[int] {
-	return func() int {
-		return i + 1
-	}
-}
-
 func main() {
 	ctx := context.Background()
-	jobs := []iterator.Job[int]{job(5), job(10)}
-	for _, r := range iterator.ParallelMapSlice(ctx, 2, jobs) {
+	in := []int{5, 10, 15}
+	f := func(i int) int { return i + 1 }
+	for _, r := range iterator.ParallelMapSlice(ctx, 2, in, f) {
 		fmt.Printf("result = %d\n", r)
 	}
 }

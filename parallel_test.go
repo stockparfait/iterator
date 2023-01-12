@@ -48,23 +48,14 @@ func TestParallelMap(t *testing.T) {
 			mux.Unlock()
 		}
 
-		job := func(i int) Job[int] {
-			return func() int {
-				start(i)
-				time.Sleep(1 * time.Millisecond)
-				end()
-				return i
-			}
+		f := func(i int) int {
+			start(i)
+			time.Sleep(1 * time.Millisecond)
+			end()
+			return i
 		}
 
-		jobs := func(n int) (jobs []Job[int]) {
-			for i := 0; i < n; i++ {
-				jobs = append(jobs, job(i))
-			}
-			return
-		}
-
-		expectedResults := func(n int) (res []int) {
+		slice := func(n int) (res []int) {
 			for i := 0; i < n; i++ {
 				res = append(res, i)
 			}
@@ -72,27 +63,27 @@ func TestParallelMap(t *testing.T) {
 		}
 
 		Convey("with limited workers", func() {
-			res := ParallelMapSlice(ctx, 5, jobs(15))
+			res := ParallelMapSlice(ctx, 5, slice(15), f)
 			So(len(res), ShouldEqual, 15)
 			So(len(sequence), ShouldEqual, 15)
 			So(maxRunning, ShouldEqual, 5)
 		})
 
 		Convey("serialized", func() {
-			res := ParallelMapSlice(TestSerialize(ctx), 5, jobs(15))
-			So(res, ShouldResemble, expectedResults(15))
+			res := ParallelMapSlice(TestSerialize(ctx), 5, slice(15), f)
+			So(res, ShouldResemble, slice(15))
 			So(maxRunning, ShouldEqual, 1)
 			So(len(sequence), ShouldEqual, 15)
 		})
 
 		Convey("with no jobs", func() {
-			res := ParallelMapSlice[int](ctx, 0, nil)
+			res := ParallelMapSlice[int](ctx, 0, nil, f)
 			So(len(res), ShouldEqual, 0)
 		})
 
 		Convey("canceling context stops enqueuing jobs", func() {
 			cc, cancel := context.WithCancel(ctx)
-			m := ParallelMap(cc, 3, FromSlice(jobs(15)))
+			m := ParallelMap(cc, 3, FromSlice(slice(15)), f)
 			_, ok := m.Next()
 			So(ok, ShouldBeTrue)
 			cancel() // 3 more still in flight
