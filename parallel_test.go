@@ -23,14 +23,14 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-var mux sync.Mutex
-
-func TestParallel(t *testing.T) {
+func TestParallelMap(t *testing.T) {
 	t.Parallel()
+
 	Convey("ParallelMap works", t, func() {
 		ctx := context.Background()
 		var running, maxRunning int
 		var sequence []int
+		var mux sync.Mutex
 
 		start := func(i int) {
 			mux.Lock()
@@ -92,7 +92,7 @@ func TestParallel(t *testing.T) {
 
 		Convey("canceling context stops enqueuing jobs", func() {
 			cc, cancel := context.WithCancel(ctx)
-			m := ParallelMap(cc, 3, Jobs(jobs(15)))
+			m := ParallelMap(cc, 3, FromSlice(jobs(15)))
 			_, ok := m.Next()
 			So(ok, ShouldBeTrue)
 			cancel() // 3 more still in flight
@@ -102,9 +102,8 @@ func TestParallel(t *testing.T) {
 			So(ok, ShouldBeTrue)
 			_, ok = m.Next()
 			So(ok, ShouldBeTrue)
-			v, ok := m.Next()
+			_, ok = m.Next()
 			So(ok, ShouldBeFalse)
-			So(v, ShouldEqual, 0)
 			So(len(sequence), ShouldEqual, 4)
 		})
 

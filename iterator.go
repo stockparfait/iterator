@@ -43,3 +43,21 @@ func ToSlice[T any](it Iterator[T]) []T {
 	}
 	return s
 }
+
+type mapIter[In, Out any] struct {
+	it Iterator[In]
+	f  func(In) Out
+}
+
+func (it *mapIter[In, Out]) Next() (Out, bool) {
+	v, ok := it.it.Next()
+	if !ok {
+		var zero Out
+		return zero, false
+	}
+	return it.f(v), true
+}
+
+func Map[In, Out any](it Iterator[In], f func(In) Out) Iterator[Out] {
+	return &mapIter[In, Out]{it: it, f: f}
+}

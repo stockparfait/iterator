@@ -25,8 +25,8 @@ const (
 	parallelKey contextKey = iota
 )
 
-// TestSerialize forces the number of workers in Map to be 1, thereby running
-// jobs serially and in the strict FIFO order. This helps make tests
+// TestSerialize forces the number of workers in ParallelMap to be 1, thereby
+// running jobs serially and in the strict FIFO order. This helps make tests
 // deterministic.
 func TestSerialize(ctx context.Context) context.Context {
 	return context.WithValue(ctx, parallelKey, true)
@@ -40,7 +40,7 @@ func isSerialized(ctx context.Context) bool {
 // Job is a unit of work to be done, which returns a result.
 type Job[T any] func() T
 
-type mapIter[T any] struct {
+type parallelMapIter[T any] struct {
 	ctx     context.Context  // potentially cancelable context
 	workers int              // maximum number of parallel jobs allowed
 	jobs    int              // number of jobs currently running
@@ -50,11 +50,11 @@ type mapIter[T any] struct {
 	mux     sync.Mutex // to make Next() go routine safe
 }
 
-var _ Iterator[int] = &mapIter[int]{}
+var _ Iterator[int] = &parallelMapIter[int]{}
 
 // ParallelMap runs multiple jobs in parallel on a given number of workers,
 // 0=unlimited, collects their results and returns as an iterator. The order of
-// results is not guaranteed, unless the number of workers is 1.
+// the results is not guaranteed, unless the number of workers is 1.
 //
 // Canceling the supplied context immediately stops queuing new jobs, but the
 // jobs that already started will finish and their results will be returned.
@@ -68,22 +68,22 @@ var _ Iterator[int] = &mapIter[int]{}
 //
 //	m := ParallelMap(context.Background(), 2, jobsIter)
 //	for v, ok := m.Next(); ok; v, ok = m.Next() {
-//	  // Process v and err.
+//	  // Process v
 //	}
-func ParallelMap[T any](ctx context.Context, workers int, it Iterator[Job[T]]) Iterator[T] {
+func ParallelMap[T any](ctx context.Context, workers int, jobs Iterator[Job[T]]) Iterator[T] {
 	if isSerialized(ctx) {
 		workers = 1
 	}
-	return &mapIter[T]{
+	return &parallelMapIter[T]{
 		ctx:     ctx,
 		workers: workers,
 		resCh:   make(chan T),
-		it:      it,
+		it:      jobs,
 	}
 }
 
 // startJobs starts as many jobs as possible given the number of workers.
-func (m *mapIter[T]) startJobs() {
+func (m *parallelMapIter[T]) startJobs() {
 	if m.done {
 		return
 	}
@@ -103,10 +103,10 @@ func (m *mapIter[T]) startJobs() {
 	}
 }
 
-// Next implements ResultsIter. It runs jobs in parallel up to the number of
+// Next implements Iterator. It runs jobs in parallel up to the number of
 // workers, blocks till at least one finishes (if any), and returns its result.
-// When no more jobs are left, return Done error. Go routine safe.
-func (m *mapIter[T]) Next() (T, bool) {
+// Go routine safe.
+func (m *parallelMapIter[T]) Next() (T, bool) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
@@ -122,14 +122,9 @@ func (m *mapIter[T]) Next() (T, bool) {
 	return r, true
 }
 
-// Jobs creates a JobsIter from a slice of Job.
-func Jobs[T any](js []Job[T]) Iterator[Job[T]] {
-	return FromSlice[Job[T]](js)
-}
-
-// ParallelMapSlice is a convenience method around Map. It runs a slice of jobs in
-// parallel, waits for them to finish, and returns the results in a slice.
+// ParallelMapSlice is a convenience method around Map. It runs a slice of jobs
+// in parallel, waits for them to finish, and returns the results in a slice.
 func ParallelMapSlice[T any](ctx context.Context, workers int, jobs []Job[T]) []T {
 	// Jobs() never returns non-nil error, it's safe to ignore it.
-	return ToSlice(ParallelMap(ctx, workers, Jobs(jobs)))
+	return ToSlice(ParallelMap(ctx, workers, FromSlice(jobs)))
 }
