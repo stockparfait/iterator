@@ -58,6 +58,17 @@ func (it *mapIter[In, Out]) Next() (Out, bool) {
 	return it.f(v), true
 }
 
+// Map transforms Iterator[In] into Iterator[Out] by applying f elementwise.
 func Map[In, Out any](it Iterator[In], f func(In) Out) Iterator[Out] {
 	return &mapIter[In, Out]{it: it, f: f}
+}
+
+// Reduce Iterator[In] into a single value Out by applying res[n+1] = f(x[n],
+// res[n]), starting with res[0] = zero.
+func Reduce[In, Out any](it Iterator[In], zero Out, f func(In, Out) Out) Out {
+	res := zero
+	for v, ok := it.Next(); ok; v, ok = it.Next() {
+		res = f(v, res)
+	}
+	return res
 }
