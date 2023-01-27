@@ -32,4 +32,9 @@ func TestIterator(t *testing.T) {
 		f := func(i int) int { return i + 1 }
 		So(ToSlice(Map(FromSlice([]int{1, 5}), f)), ShouldResemble, []int{2, 6})
 	})
+
+	Convey("Reduce", t, func() {
+		f := func(i int, out float64) float64 { return float64(i) + out }
+		So(Reduce(FromSlice([]int{1, 2, 3}), 1.0, f), ShouldResemble, 7.0)
+	})
 }
