@@ -37,4 +37,23 @@ func TestIterator(t *testing.T) {
 		f := func(i int, out float64) float64 { return float64(i) + out }
 		So(Reduce(FromSlice([]int{1, 2, 3}), 1.0, f), ShouldResemble, 7.0)
 	})
+
+	Convey("Batch", t, func() {
+		Convey("even batches", func() {
+			it := FromSlice([]int{1, 2, 3, 4, 5, 6})
+			So(ToSlice(Batch(it, 3)), ShouldResemble, [][]int{
+				{1, 2, 3}, {4, 5, 6}})
+		})
+
+		Convey("uneven batches", func() {
+			it := FromSlice([]int{1, 2, 3, 4, 5, 6, 7})
+			So(ToSlice(Batch(it, 3)), ShouldResemble, [][]int{
+				{1, 2, 3}, {4, 5, 6}, {7}})
+		})
+
+		Convey("empty input", func() {
+			it := FromSlice([]int{})
+			So(len(ToSlice(Batch(it, 3))), ShouldEqual, 0)
+		})
+	})
 }
