@@ -97,6 +97,26 @@ func TestParallelMap(t *testing.T) {
 			So(ok, ShouldBeFalse)
 			So(len(sequence), ShouldEqual, 4)
 		})
+	})
 
+	Convey("BatchReduce works", t, func() {
+		ctx := TestSerialize(context.Background())
+		f := func(n, res int) int { return n + res }
+
+		Convey("even batches", func() {
+			it := FromSlice([]int{1, 2, 3, 4, 5, 6})
+			So(ToSlice(BatchReduce[int, int](ctx, 1, it, 3, 0, f)), ShouldResemble, []int{6, 15})
+		})
+
+		Convey("uneven batches", func() {
+			it := FromSlice([]int{1, 2, 3, 4, 5, 6, 7})
+			So(ToSlice(BatchReduce(ctx, 1, it, 3, 0, f)), ShouldResemble, []int{
+				6, 15, 7})
+		})
+
+		Convey("empty input", func() {
+			it := FromSlice([]int{})
+			So(len(ToSlice(BatchReduce(ctx, 1, it, 3, 0, f))), ShouldEqual, 0)
+		})
 	})
 }

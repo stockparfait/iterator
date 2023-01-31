@@ -117,3 +117,13 @@ func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
 func ParallelMapSlice[In, Out any](ctx context.Context, workers int, in []In, f func(In) Out) []Out {
 	return ToSlice(ParallelMap(ctx, workers, FromSlice(in), f))
 }
+
+// BatchReduce reduces the input iterator in parallel batches, returning an
+// iterator of the results that can be further reduced by sequential Reduce, or
+// another layer of BatchReduce. Panics if batchSize < 1.
+func BatchReduce[In, Out any](ctx context.Context, workers int, it Iterator[In], batchSize int, zero Out, f func(In, Out) Out) Iterator[Out] {
+	batchIt := Batch(it, batchSize)
+	batchF := func(in []In) Out { return Reduce(FromSlice(in), zero, f) }
+	pm := ParallelMap(ctx, workers, batchIt, batchF)
+	return pm
+}

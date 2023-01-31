@@ -14,6 +14,10 @@
 
 package iterator
 
+import (
+	"github.com/stockparfait/errors"
+)
+
 type Iterator[T any] interface {
 	Next() (T, bool)
 }
@@ -71,4 +75,39 @@ func Reduce[In, Out any](it Iterator[In], zero Out, f func(In, Out) Out) Out {
 		res = f(v, res)
 	}
 	return res
+}
+
+type batchIter[T any] struct {
+	it   Iterator[T]
+	n    int
+	done bool
+}
+
+func (it *batchIter[T]) Next() ([]T, bool) {
+	if it.done {
+		return nil, false
+	}
+	v, ok := it.it.Next()
+	if !ok {
+		it.done = true
+		return nil, false
+	}
+	var res []T
+	for i := 0; ok && i < it.n; i++ {
+		res = append(res, v)
+		if i+1 < it.n {
+			v, ok = it.it.Next()
+		}
+	}
+	it.done = !ok
+	return res, true
+}
+
+// Batch the input iterator values into n-sized slices and return them as a new
+// iterator. Panics if n < 1.
+func Batch[T any](it Iterator[T], n int) Iterator[[]T] {
+	if n < 1 {
+		panic(errors.Reason("n=%d must be >= 1", n))
+	}
+	return &batchIter[T]{it: it, n: n}
 }
