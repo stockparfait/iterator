@@ -1,5 +1,8 @@
 # Generic iterator library
 
+[![Build Status](https://github.com/stockparfait/iterator/workflows/Tests/badge.svg)](https://github.com/stockparfait/iterator/actions?query=workflow%3ATests)
+[![GoDoc](https://godoc.org/github.com/stockparfait/iterator?status.svg)](http://godoc.org/github.com/stockparfait/iterator)
+
 This package standardizes iterator implementation using generic types. It is
 designed for ease of use in a `for` loop, and includes several commonly used
 iterator methods, such as converting a slice to an iterator and back, a
