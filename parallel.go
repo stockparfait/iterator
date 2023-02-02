@@ -63,17 +63,17 @@ type parallelMapIter[In, Out any] struct {
 //
 // Example usage:
 //
-//	 ctx, cancel := context.WithCancel(context.Background())
-//	 stop := func() {
-//	   cancel()  // stop queuing new jobs
-//	   Flush(it) // flush the remaining parallel jobs, release resources
-//	 }
-//	 defer stop()
-//	 m := ParallelMap(ctx, 2, it, f)
-//	 for v, ok := m.Next(); ok; v, ok = m.Next() {
-//	   // Process v.
-//	   // Exiting early is safe, m will be stopped and resources released.
-//		}
+//	ctx, cancel := context.WithCancel(context.Background())
+//	stop := func() {
+//	  cancel()  // stop queuing new jobs
+//	  Flush(it) // flush the remaining parallel jobs, release resources
+//	}
+//	defer stop()
+//	m := ParallelMap(ctx, 2, it, f)
+//	for v, ok := m.Next(); ok; v, ok = m.Next() {
+//	  // Process v.
+//	  // Exiting early is safe, m will be stopped and resources released.
+//	}
 func ParallelMap[In, Out any](ctx context.Context, workers int, it Iterator[In], f func(In) Out) Iterator[Out] {
 	if isSerialized(ctx) {
 		workers = 1
