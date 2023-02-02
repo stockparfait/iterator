@@ -67,11 +67,19 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
-	in := []int{5, 10, 15}
+	ctx, cancel := context.WithCancel(context.Background())
+	it := iterator.FromSlice([]int{5, 10, 15})
+	stop := func() {
+		cancel()           // stop queuing new jobs
+		iterator.Flush(it) // flush the remaining parallel jobs, release resources
+	}
+	defer stop()
+
 	f := func(i int) int { return i + 1 }
-	for _, r := range iterator.ParallelMapSlice(ctx, 2, in, f) {
+	pm := iterator.ParallelMap(ctx, 2, it, f)
+	for r, ok := pm.Next(); ok; r, ok = pm.Next() {
 		fmt.Printf("result = %d\n", r)
+		// Early exit is safe, resources will be released.
 	}
 }
 ```
