@@ -111,3 +111,11 @@ func Batch[T any](it Iterator[T], n int) Iterator[[]T] {
 	}
 	return &batchIter[T]{it: it, n: n}
 }
+
+// Flush the remaining elements from the iterator. This is useful for
+// ParallelMap and BatchReduce when their context is canceled and the iterator
+// needs to flush the remaining parallel jobs to release resources.
+func Flush[T any](it Iterator[T]) {
+	for _, ok := it.Next(); ok; _, ok = it.Next() {
+	}
+}
