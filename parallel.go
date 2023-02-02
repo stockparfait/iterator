@@ -55,6 +55,9 @@ type parallelMapIter[In, Out any] struct {
 // Therefore, it is important to flush the iterator after canceling the context
 // to release all the resources.
 //
+// Similarly, any early exit from the iterator loop must ensure that the context
+// is canceled and the iterator is flushed.
+//
 // No job is started by this method itself. Jobs begin to run on the first
 // Next() call on the result iterator, which is go routine safe.
 //
@@ -66,9 +69,9 @@ type parallelMapIter[In, Out any] struct {
 //	   Flush(it) // flush the remaining parallel jobs, release resources
 //	 }
 //	 defer stop()
-//		m := ParallelMap(ctx, 2, it, f)
-//		for v, ok := m.Next(); ok; v, ok = m.Next() {
-//		  // Process v.
+//	 m := ParallelMap(ctx, 2, it, f)
+//	 for v, ok := m.Next(); ok; v, ok = m.Next() {
+//	   // Process v.
 //	   // Exiting early is safe, m will be stopped and resources released.
 //		}
 func ParallelMap[In, Out any](ctx context.Context, workers int, it Iterator[In], f func(In) Out) Iterator[Out] {
@@ -128,6 +131,9 @@ func ParallelMapSlice[In, Out any](ctx context.Context, workers int, in []In, f 
 // BatchReduce reduces the input iterator in parallel batches, returning an
 // iterator of the results that can be further reduced by sequential Reduce, or
 // another layer of BatchReduce. Panics if batchSize < 1.
+//
+// Same as ParallelMap, canceling context stops queuing new jobs, but the
+// iterator needs to Flush to release resources. See ParallelMap for an example.
 func BatchReduce[In, Out any](ctx context.Context, workers int, it Iterator[In], batchSize int, zero Out, f func(In, Out) Out) Iterator[Out] {
 	batchIt := Batch(it, batchSize)
 	batchF := func(in []In) Out { return Reduce(FromSlice(in), zero, f) }
