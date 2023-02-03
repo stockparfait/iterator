@@ -36,16 +36,6 @@ func isSerialized(ctx context.Context) bool {
 	return ok && v
 }
 
-type parallelMapIter[In, Out any] struct {
-	ctx     context.Context // potentially cancelable context
-	workers int             // maximum number of parallel jobs allowed
-	jobs    int             // number of jobs currently running
-	it      Iterator[In]
-	f       func(In) Out
-	resCh   chan Out // workers send their results to this channel
-	done    bool
-}
-
 // ParallelMap runs multiple function calls f(In) in parallel on a given number
 // of workers (0=unlimited), collects their results and returns as an iterator.
 // The order of the results is undefined, unless the number of workers is 1.
@@ -63,28 +53,36 @@ type parallelMapIter[In, Out any] struct {
 //
 // Example usage:
 //
-//	ctx, cancel := context.WithCancel(context.Background())
-//	m := ParallelMap(ctx, 2, it, f)
-//	stop := func() {
-//	  cancel()  // stop queuing new jobs
-//	  Flush(m)  // flush the remaining parallel jobs, release resources
-//	}
-//	defer stop()
+//	m := ParallelMap(context.Background(), 2, it, f)
+//	defer m.Close()
 //	for v, ok := m.Next(); ok; v, ok = m.Next() {
 //	  // Process v.
-//	  // Exiting early is safe, m will be stopped and resources released.
+//	  // Exiting early is safe, m will be closed and resources released.
 //	}
-func ParallelMap[In, Out any](ctx context.Context, workers int, it Iterator[In], f func(In) Out) Iterator[Out] {
+func ParallelMap[In, Out any](ctx context.Context, workers int, it Iterator[In], f func(In) Out) IteratorCloser[Out] {
 	if isSerialized(ctx) {
 		workers = 1
 	}
+	ctx, cancel := context.WithCancel(ctx)
 	return &parallelMapIter[In, Out]{
 		ctx:     ctx,
+		cancel:  cancel,
 		workers: workers,
 		resCh:   make(chan Out),
 		it:      it,
 		f:       f,
 	}
+}
+
+type parallelMapIter[In, Out any] struct {
+	ctx     context.Context // potentially cancelable context
+	cancel  func()          // cancels the context
+	workers int             // maximum number of parallel jobs allowed
+	jobs    int             // number of jobs currently running
+	it      Iterator[In]
+	f       func(In) Out
+	resCh   chan Out // workers send their results to this channel
+	done    bool
 }
 
 // startJobs starts as many jobs as possible given the number of workers.
@@ -123,9 +121,14 @@ func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
 	return r, true
 }
 
+func (m *parallelMapIter[In, Out]) Close() {
+	m.cancel()
+	Flush[Out](m)
+}
+
 // ParallelMapSlice maps an input slice into the output slice using ParallelMap.
 func ParallelMapSlice[In, Out any](ctx context.Context, workers int, in []In, f func(In) Out) []Out {
-	return ToSlice(ParallelMap(ctx, workers, FromSlice(in), f))
+	return ToSlice[Out](ParallelMap(ctx, workers, FromSlice(in), f))
 }
 
 // BatchReduce reduces the input iterator in parallel batches, returning an
@@ -134,7 +137,7 @@ func ParallelMapSlice[In, Out any](ctx context.Context, workers int, in []In, f 
 //
 // Same as ParallelMap, canceling context stops queuing new jobs, but the
 // iterator needs to Flush to release resources. See ParallelMap for an example.
-func BatchReduce[In, Out any](ctx context.Context, workers int, it Iterator[In], batchSize int, zero Out, f func(In, Out) Out) Iterator[Out] {
+func BatchReduce[In, Out any](ctx context.Context, workers int, it Iterator[In], batchSize int, zero Out, f func(In, Out) Out) IteratorCloser[Out] {
 	batchIt := Batch(it, batchSize)
 	batchF := func(in []In) Out { return Reduce(FromSlice(in), zero, f) }
 	pm := ParallelMap(ctx, workers, batchIt, batchF)

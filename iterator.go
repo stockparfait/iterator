@@ -18,8 +18,34 @@ import (
 	"github.com/stockparfait/errors"
 )
 
+// Iterator is a generic interface for generating sequences of values of type T.
+//
+// When the second Next()'s result is true it returns the next value. When it's
+// false, the iterator is considered "empty", and subsequent calls to Next() are
+// expected to return false.
+//
+// Example use of an iterator "it":
+//
+//	for v, ok := it.Next(); ok; v, ok = it.Next() {
+//	  // use v
+//	}
 type Iterator[T any] interface {
 	Next() (T, bool)
+}
+
+// IteratorCloser is an iterator with an additional Close() method which empties
+// the iterator (a subsequent Next() call returns ok=false) and releases all
+// associated resources, such as active go-routines.
+//
+// Example use of a closing iterator "it":
+//
+//	defer it.Close()
+//	for v; ok := it.Next(); ok; v, ok = it.Next() {
+//	  // use v; can safely exit early
+//	}
+type IteratorCloser[T any] interface {
+	Iterator[T]
+	Close()
 }
 
 type sliceIter[T any] struct {

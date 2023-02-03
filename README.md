@@ -67,17 +67,12 @@ import (
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 	it := iterator.FromSlice([]int{5, 10, 15})
 	f := func(i int) int { return i + 1 }
 
 	pm := iterator.ParallelMap(ctx, 2, it, f)
-
-	stop := func() {
-		cancel()           // stop queuing new jobs
-		iterator.Flush(pm) // flush the remaining parallel jobs, release resources
-	}
-	defer stop()
+	defer pm.Close()
 
 	for r, ok := pm.Next(); ok; r, ok = pm.Next() {
 		fmt.Printf("result = %d\n", r)
