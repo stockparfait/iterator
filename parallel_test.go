@@ -97,6 +97,16 @@ func TestParallelMap(t *testing.T) {
 			So(ok, ShouldBeFalse)
 			So(len(sequence), ShouldEqual, 4)
 		})
+
+		Convey("Close stops and flushes the iterator", func() {
+			m := ParallelMap(ctx, 3, FromSlice(slice(15)), f)
+			_, ok := m.Next()
+			So(ok, ShouldBeTrue)
+			m.Close() // 3 more were in flight, but should be flushed
+			_, ok = m.Next()
+			So(ok, ShouldBeFalse)
+			So(len(sequence), ShouldEqual, 4)
+		})
 	})
 
 	Convey("BatchReduce works", t, func() {
@@ -105,18 +115,18 @@ func TestParallelMap(t *testing.T) {
 
 		Convey("even batches", func() {
 			it := FromSlice([]int{1, 2, 3, 4, 5, 6})
-			So(ToSlice(BatchReduce[int, int](ctx, 1, it, 3, 0, f)), ShouldResemble, []int{6, 15})
+			So(ToSlice[int](BatchReduce[int, int](ctx, 1, it, 3, 0, f)), ShouldResemble, []int{6, 15})
 		})
 
 		Convey("uneven batches", func() {
 			it := FromSlice([]int{1, 2, 3, 4, 5, 6, 7})
-			So(ToSlice(BatchReduce(ctx, 1, it, 3, 0, f)), ShouldResemble, []int{
+			So(ToSlice[int](BatchReduce(ctx, 1, it, 3, 0, f)), ShouldResemble, []int{
 				6, 15, 7})
 		})
 
 		Convey("empty input", func() {
 			it := FromSlice([]int{})
-			So(len(ToSlice(BatchReduce(ctx, 1, it, 3, 0, f))), ShouldEqual, 0)
+			So(len(ToSlice[int](BatchReduce(ctx, 1, it, 3, 0, f))), ShouldEqual, 0)
 		})
 	})
 }
