@@ -63,4 +63,18 @@ func TestIterator(t *testing.T) {
 		Flush(it)
 		So(len(ToSlice(it)), ShouldEqual, 0)
 	})
+
+	Convey("WithClose", t, func() {
+		it := FromSlice([]int{1, 2, 3})
+		var closeCalls int
+		closer := WithClose(it, func() { Flush(it); closeCalls++ })
+		v, ok := closer.Next()
+		So(ok, ShouldBeTrue)
+		So(v, ShouldEqual, 1)
+		closer.Close()
+		_, ok = closer.Next()
+		So(ok, ShouldBeFalse)
+		closer.Close()
+		So(closeCalls, ShouldEqual, 1) // no duplicate calls to close
+	})
 }

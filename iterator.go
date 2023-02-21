@@ -138,10 +138,37 @@ func Batch[T any](it Iterator[T], n int) Iterator[[]T] {
 	return &batchIter[T]{it: it, n: n}
 }
 
-// Flush the remaining elements from the iterator. This is useful for
-// ParallelMap and BatchReduce when their context is canceled and the iterator
-// needs to flush the remaining parallel jobs to release resources.
+// Flush the remaining elements from the iterator. This can be useful for a
+// custom IteratorCloser when the iterator needs to flush remaining elements to
+// release resources.
 func Flush[T any](it Iterator[T]) {
 	for _, ok := it.Next(); ok; _, ok = it.Next() {
 	}
+}
+
+type itCloser[T any] struct {
+	it     Iterator[T]
+	close  func()
+	closed bool
+}
+
+func (it *itCloser[T]) Next() (T, bool) {
+	if it.closed {
+		var zero T
+		return zero, false
+	}
+	return it.it.Next()
+}
+
+func (it *itCloser[T]) Close() {
+	if it.closed {
+		return
+	}
+	it.close()
+	it.closed = true
+}
+
+// WithClose attaches a close function to an iterator.
+func WithClose[T any](it Iterator[T], close func()) IteratorCloser[T] {
+	return &itCloser[T]{it: it, close: close}
 }
