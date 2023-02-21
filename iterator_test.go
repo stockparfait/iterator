@@ -77,4 +77,8 @@ func TestIterator(t *testing.T) {
 		closer.Close()
 		So(closeCalls, ShouldEqual, 1) // no duplicate calls to close
 	})
+
+	Convey("Repeat", t, func() {
+		So(ToSlice(Repeat(42, 5)), ShouldResemble, []int{42, 42, 42, 42, 42})
+	})
 }

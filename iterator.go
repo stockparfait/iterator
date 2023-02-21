@@ -172,3 +172,22 @@ func (it *itCloser[T]) Close() {
 func WithClose[T any](it Iterator[T], close func()) IteratorCloser[T] {
 	return &itCloser[T]{it: it, close: close}
 }
+
+type repeatIter[T any] struct {
+	v T
+	n int
+}
+
+func (it *repeatIter[T]) Next() (T, bool) {
+	if it.n <= 0 {
+		var zero T
+		return zero, false
+	}
+	it.n--
+	return it.v, true
+}
+
+// Repeat value n times.
+func Repeat[T any](value T, n int) Iterator[T] {
+	return &repeatIter[T]{v: value, n: n}
+}
