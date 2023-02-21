@@ -168,7 +168,7 @@ func (it *itCloser[T]) Close() {
 	it.closed = true
 }
 
-// WithClose attaches a close function to at iterator.
+// WithClose attaches a close function to an iterator.
 func WithClose[T any](it Iterator[T], close func()) IteratorCloser[T] {
 	return &itCloser[T]{it: it, close: close}
 }

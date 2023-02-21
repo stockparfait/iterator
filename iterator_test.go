@@ -75,6 +75,6 @@ func TestIterator(t *testing.T) {
 		_, ok = closer.Next()
 		So(ok, ShouldBeFalse)
 		closer.Close()
-		So(closeCalls, ShouldEqual, 1) // calls attached close only once
+		So(closeCalls, ShouldEqual, 1) // no duplicate calls to close
 	})
 }
