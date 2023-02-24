@@ -138,6 +138,40 @@ func Batch[T any](it Iterator[T], n int) Iterator[[]T] {
 	return &batchIter[T]{it: it, n: n}
 }
 
+type chainIter[T any] struct {
+	it   Iterator[Iterator[T]]
+	curr Iterator[T]
+}
+
+func (it *chainIter[T]) Next() (T, bool) {
+	for {
+		if it.curr == nil {
+			next, ok := it.it.Next()
+			if !ok {
+				var zero T
+				return zero, false
+			}
+			it.curr = next
+		}
+		v, ok := it.curr.Next()
+		if !ok {
+			it.curr = nil
+			continue
+		}
+		return v, true
+	}
+}
+
+// Chain iterator of iterators into a single continuous iterator.
+func Chain[T any](it Iterator[Iterator[T]]) Iterator[T] {
+	return &chainIter[T]{it: it}
+}
+
+// Unbatch flattens a batched iterator, effectively undoing Batch().
+func Unbatch[T any](it Iterator[[]T]) Iterator[T] {
+	return Chain(Map(it, FromSlice[T]))
+}
+
 // Flush the remaining elements from the iterator. This can be useful for a
 // custom IteratorCloser when the iterator needs to flush remaining elements to
 // release resources.

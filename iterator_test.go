@@ -55,7 +55,11 @@ func TestIterator(t *testing.T) {
 			it := FromSlice([]int{})
 			So(len(ToSlice(Batch(it, 3))), ShouldEqual, 0)
 		})
+	})
 
+	Convey("Unbatch", t, func() {
+		it := FromSlice([][]int{{1, 2}, {}, {3, 4, 5}})
+		So(ToSlice(Unbatch(it)), ShouldResemble, []int{1, 2, 3, 4, 5})
 	})
 
 	Convey("Flush", t, func() {
