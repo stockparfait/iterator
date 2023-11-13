@@ -24,6 +24,11 @@ const (
 	parallelKey contextKey = iota
 )
 
+type enumerated[Out any] struct {
+	v Out
+	i int // sequence number
+}
+
 // TestSerialize forces the number of workers in ParallelMap to be 1, thereby
 // running jobs serially and in the strict FIFO order. This helps make tests
 // deterministic.
@@ -63,26 +68,61 @@ func ParallelMap[In, Out any](ctx context.Context, workers int, it Iterator[In],
 	if isSerialized(ctx) {
 		workers = 1
 	}
+	if workers <= 0 {
+		workers = 1
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &parallelMapIter[In, Out]{
 		ctx:     ctx,
 		cancel:  cancel,
 		workers: workers,
-		resCh:   make(chan Out),
+		resCh:   make(chan enumerated[Out]),
 		it:      it,
 		f:       f,
 	}
 }
 
+// OrderedParallelMap is like ParallMap, only it preserves the output order. The
+// bufferSize must be >= workers, otherwise it effectively reduces parallelism
+// to bufferSize workers. Larger bufferSize may improve parallelization when
+// some jobs take a lot longer than others.
+func OrderedParallelMap[In, Out any](ctx context.Context, workers, bufferSize int, it Iterator[In], f func(In) Out) IteratorCloser[Out] {
+	if isSerialized(ctx) {
+		workers = 1
+	}
+	if workers <= 0 {
+		workers = 1
+	}
+	if bufferSize <= 0 {
+		bufferSize = 1
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	return &parallelMapIter[In, Out]{
+		ctx:     ctx,
+		cancel:  cancel,
+		workers: workers,
+		it:      it,
+		f:       f,
+		resCh:   make(chan enumerated[Out]),
+		buffer:  make([]Out, bufferSize),
+		ready:   make([]bool, bufferSize),
+	}
+}
+
 type parallelMapIter[In, Out any] struct {
-	ctx     context.Context // potentially cancelable context
-	cancel  func()          // cancels the context
-	workers int             // maximum number of parallel jobs allowed
-	jobs    int             // number of jobs currently running
-	it      Iterator[In]
-	f       func(In) Out
-	resCh   chan Out // workers send their results to this channel
-	done    bool
+	ctx       context.Context // potentially cancelable context
+	cancel    func()          // cancels the context
+	workers   int             // maximum number of parallel jobs allowed
+	jobs      int             // number of jobs currently running
+	it        Iterator[In]
+	f         func(In) Out
+	resCh     chan enumerated[Out] // workers send their results to this channel
+	done      bool
+	buffer    []Out  // reorder buffer; ignore if nil
+	ready     []bool // which cells are ready in buffer
+	numReady  int    // number of ready cells
+	nextSched int    // next cell to schedule
+	next      int    // next cell to return in Next()
 }
 
 // startJobs starts as many jobs as possible given the number of workers.
@@ -97,12 +137,20 @@ func (m *parallelMapIter[In, Out]) startJobs() {
 			return
 		default:
 		}
+		if len(m.buffer) > 0 && m.jobs == len(m.buffer) {
+			return
+		}
 		v, ok := m.it.Next()
 		if !ok {
 			m.done = true
 			return
 		}
-		go func() { m.resCh <- m.f(v) }()
+		go func(i int) {
+			m.resCh <- enumerated[Out]{v: m.f(v), i: i}
+		}(m.nextSched)
+		if len(m.buffer) > 0 {
+			m.nextSched = (m.nextSched + 1) % len(m.buffer)
+		}
 	}
 }
 
@@ -110,15 +158,36 @@ func (m *parallelMapIter[In, Out]) startJobs() {
 // workers, blocks till at least one finishes (if any), and returns its result.
 func (m *parallelMapIter[In, Out]) Next() (Out, bool) {
 	m.startJobs()
-	if m.jobs == 0 {
+	if len(m.buffer) == 0 {
+		if m.jobs == 0 {
+			m.done = true
+			var zero Out
+			return zero, false
+		}
+
+		r := <-m.resCh
+		m.jobs--
+		m.startJobs()
+		return r.v, true
+	}
+	if m.numReady == 0 && m.jobs == 0 {
 		m.done = true
 		var zero Out
 		return zero, false
 	}
-	r := <-m.resCh
-	m.jobs--
+	for !m.ready[m.next] {
+		r := <-m.resCh
+		m.jobs--
+		m.buffer[r.i] = r.v
+		m.ready[r.i] = true
+		m.numReady++
+	}
+	res := m.buffer[m.next]
+	m.ready[m.next] = false
+	m.numReady--
+	m.next = (m.next + 1) % len(m.buffer)
 	m.startJobs()
-	return r, true
+	return res, true
 }
 
 func (m *parallelMapIter[In, Out]) Close() {
