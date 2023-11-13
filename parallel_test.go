@@ -50,7 +50,7 @@ func TestParallelMap(t *testing.T) {
 
 		f := func(i int) int {
 			start(i)
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(time.Millisecond)
 			end()
 			return i
 		}
@@ -106,6 +106,20 @@ func TestParallelMap(t *testing.T) {
 			_, ok = m.Next()
 			So(ok, ShouldBeFalse)
 			So(len(sequence), ShouldEqual, 4)
+		})
+
+		Convey("OrderedParallelMap preserves order", func() {
+			Convey("Buffer larger than workers", func() {
+				m := OrderedParallelMap(ctx, 5, 10, FromSlice(slice(15)), f)
+				defer m.Close()
+				So(ToSlice(m), ShouldResemble, slice(15))
+			})
+
+			Convey("Buffer smaller than workers", func() {
+				m := OrderedParallelMap(ctx, 5, 2, FromSlice(slice(15)), f)
+				defer m.Close()
+				So(ToSlice(m), ShouldResemble, slice(15))
+			})
 		})
 	})
 
