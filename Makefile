@@ -24,8 +24,8 @@ all:
 	@echo "  make clean    - delete generated files"
 
 init:
-	go install github.com/smartystreets/goconvey@v1.7.2
-	go install honnef.co/go/tools/cmd/staticcheck@2022.1.3
+	go install github.com/smartystreets/goconvey@v1.8.1
+	go install honnef.co/go/tools/cmd/staticcheck@2023.1.6
 	go install github.com/sergey-a-berezin/gocovcheck@v1.3.0
 	go install github.com/sergey-a-berezin/gocovcheck/jsonread@v1.3.0
 	@echo "Bootstrap done!"
