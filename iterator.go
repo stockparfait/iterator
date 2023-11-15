@@ -181,7 +181,7 @@ func (it *chainIter[T]) Close() {
 	it.it.Close()
 }
 
-// ChainCloser chain closing iterator of closing iterators into a single
+// ChainCloser chains closing iterator of closing iterators into a single
 // continuous closing iterator. Each iterator is closed when exhausted, or when
 // the top-level Close() is called. The top-level Close() also closes the input
 // iterator of the iterators.
