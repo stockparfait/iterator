@@ -28,9 +28,14 @@ func TestIterator(t *testing.T) {
 		So(ToSlice(FromSlice(slice)), ShouldResemble, slice)
 	})
 
-	Convey("Map", t, func() {
+	Convey("Map, MapCloser", t, func() {
+		var closed bool
 		f := func(i int) int { return i + 1 }
-		So(ToSlice(Map(FromSlice([]int{1, 5}), f)), ShouldResemble, []int{2, 6})
+		it := WithClose(FromSlice([]int{1, 5}), func() { closed = true })
+		mp := MapCloser(it, f)
+		So(ToSlice(mp), ShouldResemble, []int{2, 6})
+		mp.Close()
+		So(closed, ShouldBeTrue)
 	})
 
 	Convey("Reduce", t, func() {
@@ -57,9 +62,55 @@ func TestIterator(t *testing.T) {
 		})
 	})
 
+	Convey("BatchCloser", t, func() {
+		var closed bool
+		it := WithClose(FromSlice([]int{1, 2, 3, 4, 5}), func() { closed = true })
+		bit := BatchCloser(it, 3)
+		So(ToSlice(bit), ShouldResemble, [][]int{{1, 2, 3}, {4, 5}})
+		bit.Close()
+		So(closed, ShouldBeTrue)
+	})
+
+	Convey("ChainCloser", t, func() {
+		var closedTop, closed1, closed2 bool
+		it1 := WithClose(FromSlice([]int{1, 2, 3}), func() { closed1 = true })
+		it2 := WithClose(FromSlice([]int{4, 5}), func() { closed2 = true })
+		it := WithClose(FromSlice([]IteratorCloser[int]{it1, it2}),
+			func() { closedTop = true })
+		out := ChainCloser(it)
+
+		Convey("drain then close", func() {
+			So(ToSlice(out), ShouldEqual, []int{1, 2, 3, 4, 5})
+			out.Close()
+			So(closedTop, ShouldBeTrue)
+			So(closed1, ShouldBeTrue)
+			So(closed2, ShouldBeTrue)
+		})
+
+		Convey("close midway", func() {
+			v, ok := out.Next()
+			So(ok, ShouldBeTrue)
+			So(v, ShouldEqual, 1)
+			out.Close()
+			So(closedTop, ShouldBeTrue)
+			So(closed1, ShouldBeTrue)  // current
+			So(closed2, ShouldBeFalse) // never requested
+		})
+	})
+
 	Convey("Unbatch", t, func() {
 		it := FromSlice([][]int{{1, 2}, {}, {3, 4, 5}})
 		So(ToSlice(Unbatch(it)), ShouldResemble, []int{1, 2, 3, 4, 5})
+	})
+
+	Convey("UnbatchCloser", t, func() {
+		var closed bool
+		it := WithClose(FromSlice([][]int{{1, 2}, {}, {3, 4, 5}}),
+			func() { closed = true })
+		ub := UnbatchCloser(it)
+		So(ToSlice(ub), ShouldResemble, []int{1, 2, 3, 4, 5})
+		ub.Close()
+		So(closed, ShouldBeTrue)
 	})
 
 	Convey("Flush", t, func() {
