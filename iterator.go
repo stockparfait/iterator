@@ -93,6 +93,11 @@ func Map[In, Out any](it Iterator[In], f func(In) Out) Iterator[Out] {
 	return &mapIter[In, Out]{it: it, f: f}
 }
 
+// MapCloser is like Map but propagates Close() to the output iterator.
+func MapCloser[In, Out any](it IteratorCloser[In], f func(In) Out) IteratorCloser[Out] {
+	return WithClose(Map(it, f), func() { it.Close() })
+}
+
 // Reduce Iterator[In] into a single value Out by applying res[n+1] = f(x[n],
 // res[n]), starting with res[0] = zero.
 func Reduce[In, Out any](it Iterator[In], zero Out, f func(In, Out) Out) Out {
@@ -138,9 +143,14 @@ func Batch[T any](it Iterator[T], n int) Iterator[[]T] {
 	return &batchIter[T]{it: it, n: n}
 }
 
+// BatchCloser is like Batch but propagates Close() to the output iterator.
+func BatchCloser[T any](it IteratorCloser[T], n int) IteratorCloser[[]T] {
+	return WithClose(Batch(it, n), func() { it.Close() })
+}
+
 type chainIter[T any] struct {
-	it   Iterator[Iterator[T]]
-	curr Iterator[T]
+	it   IteratorCloser[IteratorCloser[T]]
+	curr IteratorCloser[T]
 }
 
 func (it *chainIter[T]) Next() (T, bool) {
@@ -155,6 +165,7 @@ func (it *chainIter[T]) Next() (T, bool) {
 		}
 		v, ok := it.curr.Next()
 		if !ok {
+			it.curr.Close()
 			it.curr = nil
 			continue
 		}
@@ -162,14 +173,39 @@ func (it *chainIter[T]) Next() (T, bool) {
 	}
 }
 
+func (it *chainIter[T]) Close() {
+	if it.curr != nil {
+		it.curr.Close()
+		it.curr = nil
+	}
+	it.it.Close()
+}
+
+// ChainCloser chain closing iterator of closing iterators into a single
+// continuous closing iterator. Each iterator is closed when exhausted, or when
+// the top-level Close() is called. The top-level Close() also closes the input
+// iterator of the iterators.
+func ChainCloser[T any](it IteratorCloser[IteratorCloser[T]]) IteratorCloser[T] {
+	return &chainIter[T]{it: it}
+}
+
 // Chain iterator of iterators into a single continuous iterator.
 func Chain[T any](it Iterator[Iterator[T]]) Iterator[T] {
-	return &chainIter[T]{it: it}
+	f := func(i Iterator[T]) IteratorCloser[T] { return WithClose(i, func() {}) }
+	itc := Map(it, f)
+	return &chainIter[T]{it: WithClose(itc, func() {})}
 }
 
 // Unbatch flattens a batched iterator, effectively undoing Batch().
 func Unbatch[T any](it Iterator[[]T]) Iterator[T] {
 	return Chain(Map(it, FromSlice[T]))
+}
+
+// UnbatchCloser is like Unbatch but propagates Close() to the output iterator.
+func UnbatchCloser[T any](it IteratorCloser[[]T]) IteratorCloser[T] {
+	return ChainCloser(MapCloser(it, func(vs []T) IteratorCloser[T] {
+		return WithClose(FromSlice[T](vs), func() {})
+	}))
 }
 
 // Flush the remaining elements from the iterator. This can be useful for a
